@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { ethers } from 'ethers';
+
 import './App.css';
 import twitterLogo from './assets/twitter-logo.svg';
 
+import contract from './utils/BattleForMiddleEarth.json';
+import { CONTRACT_ADDRESS, transformCharacterData } from './constants';
 import SelectCharacter from './Components/SelectCharacter';
+import Arena from './Components/Arena';
+import LoadingIndicator from './Components/LoadingIndicator';
 
 // Constants
 const TWITTER_HANDLE = '_buildspace';
@@ -11,6 +17,17 @@ const TWITTER_LINK = `https://twitter.com/${TWITTER_HANDLE}`;
 const App = () => {
   const [currentAccount, setCurrentAccount] = useState(null);
   const [characterNFT, setCharacterNFT] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const checkNetwork = async () => {
+    try { 
+      if (window.ethereum.networkVersion !== '4') {
+        alert("Please connect to Rinkeby!")
+      }
+    } catch(error) {
+      console.log(error)
+    }
+  }
 
   const checkIfWalletIsConnected = async () => {
     try {
@@ -18,6 +35,8 @@ const App = () => {
 
       if (!ethereum) {
         console.log('Make sure you have MetaMask!');
+
+        setIsLoading(false);
         return;
       } else {
         console.log('We have the ethereum object', ethereum);
@@ -35,6 +54,8 @@ const App = () => {
     } catch (error) {
       console.log(error);
     }
+
+    setIsLoading(false);
   };
 
   const connectWalletAction = async () => {
@@ -58,6 +79,10 @@ const App = () => {
   };
 
   const renderContent = () => {
+    if (isLoading) {
+      return <LoadingIndicator />;
+    }
+    
     if (!currentAccount) {
       return (
         <div className="connect-wallet-container">
@@ -74,19 +99,64 @@ const App = () => {
         </div>
       );
     } else if (currentAccount && !characterNFT) {
-      return <SelectCharacter setCharacterNFT={setCharacterNFT} />;
+      return <SelectCharacter setCharacterNFT={setCharacterNFT} />;	
+    /*
+    * If there is a connected wallet and characterNFT, it's time to battle!
+    */
+    } else if (currentAccount && characterNFT) {
+      return <Arena characterNFT={characterNFT} setCharacterNFT={setCharacterNFT} />;
     }
   };
+
+  
+  useEffect(() => {
+    checkNetwork();
+  }, []);
 
   useEffect(() => {
     checkIfWalletIsConnected();
   }, []);
 
+  useEffect(() => {
+    /*
+    * The function we will call that interacts with out smart contract
+    */
+    const fetchNFTMetadata = async () => {
+      console.log('Checking for Character NFT on address:', currentAccount);
+
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const gameContract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        contract.abi,
+        signer
+      );
+
+      const txn = await gameContract.checkIfUserHasNFT();
+      if (txn.name) {
+        console.log('User has character NFT');
+        setCharacterNFT(transformCharacterData(txn));
+      } else {
+        console.log('No character NFT found');
+      }
+    };
+
+    /*
+    * We only want to run this, if we have a connected wallet
+    */
+    if (currentAccount) {
+      console.log('CurrentAccount:', currentAccount);
+      fetchNFTMetadata();
+    }
+
+    setIsLoading(false);
+  }, [currentAccount]);
+
   return (
     <div className="App">
       <div className="container">
         <div className="header-container">
-          <p className="header gradient-text">⚔️ Metaverse Slayer ⚔️</p>
+          <p className="header gradient-text">⚔️ Battle for Middle Earth ⚔️</p>
           <p className="sub-text">Team up to protect the Metaverse!</p>
           {/* This is where our button and image code used to be!
           *	Remember we moved it into the render method.
